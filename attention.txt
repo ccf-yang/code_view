@@ -1,0 +1,2 @@
+zhipu可以json输出了，依赖提示词和json处理，参考
+https://open.bigmodel.cn/dev/howuse/jsonformat

@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
+from zhipuai import ZhipuAI
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,8 +29,12 @@ client = OpenAI(
     api_key="d63ccf43-a0e1-4011-b5cc-19d204794b29"
 )
 
+# 智谱AI配置
+ZHIPU_API_KEY = "907cd4277f8a353cdc15dbcd2c287327.699fhMuv7NCKDyIS"  # 请填写您的智谱API密钥
+
 class AnalyzeRequest(BaseModel):
     code: str
+    model: str = "qwen/qwen-2-72b-instruct"  # 默认使用 Novita AI
     stream: bool = False
 
 class SaveAnalysisRequest(BaseModel):
@@ -108,21 +113,42 @@ async def save_analysis(request: SaveAnalysisRequest):
         logger.error(f"Error saving analysis: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+async def analyze_with_zhipu(code: str) -> str:
+    """使用智谱AI分析代码"""
+    try:
+        client = ZhipuAI(api_key=ZHIPU_API_KEY)
+        response = client.chat.completions.create(
+            model="glm-4-plus",
+            messages=[
+                {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."},
+                {"role": "user", "content": code}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error with Zhipu AI: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/analyze")
 async def analyze_code(request: AnalyzeRequest):
-    """Analyze code using Novita AI API."""
+    """Analyze code using selected AI model."""
     try:
-        completion_res = client.completions.create(
-            model="qwen/qwen-2-72b-instruct",
-            prompt = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese.Code: "+request.code,
-            temperature=0.8,
-            stream=False,
-            max_tokens=5000,
-            timeout=100
-        )
-        content = completion_res.choices[0].text
-        return {"content": content}
+        if request.model == "glm-4-plus":
+            logger.info("Using Zhipu AI for code analysis")
+            content = await analyze_with_zhipu(request.code)
+        else:
+            logger.info(f"Using Novita AI model {request.model} for code analysis")
+            completion_res = client.completions.create(
+                model=request.model,
+                prompt="You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese.Code: " + request.code,
+                temperature=0.8,
+                stream=False,
+                max_tokens=5000,
+                timeout=100
+            )
+            content = completion_res.choices[0].text
 
+        return {"content": content}
     except Exception as e:
         logger.error(f"Error in code analysis: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

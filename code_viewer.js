@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     const projectPath = document.getElementById('projectPath');
+    const inputType = document.getElementById('inputType');
     const refreshBtn = document.getElementById('refreshBtn');
     const fileList = document.getElementById('fileList');
     const fileContent = document.getElementById('fileContent');
@@ -7,10 +8,23 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveAiBtn = document.getElementById('saveAiBtn');
     const aiResult = document.getElementById('aiResult');
     const notification = document.getElementById('notification');
+    const modelSelect = document.getElementById('modelSelect'); // Assuming this element exists
+    const currentFile = document.getElementById('currentFile');
     
     let currentFilePath = '';  // Store current file path
     let lastSavedAnalysis = ''; // Store last saved analysis content
     let notificationTimeout;
+
+    // Update input placeholder based on selected type
+    inputType.addEventListener('change', function() {
+        if (this.value === 'local') {
+            projectPath.placeholder = '请输入本地目录路径，例如：D:/projects/mycode';
+            refreshBtn.textContent = '加载项目';
+        } else {
+            projectPath.placeholder = '请输入Git仓库地址，例如：https://github.com/username/repo';
+            refreshBtn.textContent = '克隆并加载';
+        }
+    });
 
     // Show notification function
     function showNotification(message, isError = false) {
@@ -35,7 +49,12 @@ document.addEventListener('DOMContentLoaded', function() {
     refreshBtn.addEventListener('click', async () => {
         const path = projectPath.value.trim();
         if (!path) {
-            showNotification('请输入项目目录路径', true);
+            showNotification('请输入' + (inputType.value === 'local' ? '项目目录路径' : 'Git仓库地址'), true);
+            return;
+        }
+
+        if (inputType.value === 'git') {
+            showNotification('Git仓库克隆功能即将推出，敬请期待！');
             return;
         }
         
@@ -121,6 +140,7 @@ document.addEventListener('DOMContentLoaded', function() {
     async function loadFile(filePath) {
         try {
             currentFilePath = filePath;
+            currentFile.textContent = `当前文件：${filePath}`;
             
             // Load file content
             const contentResponse = await fetch(`http://localhost:8000/api/content?path=${encodeURIComponent(filePath)}`);
@@ -158,6 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // AI Analysis button click handler
     aiBtn.addEventListener('click', async () => {
         const content = fileContent.textContent;
+        const selectedModel = modelSelect.value;
+        
         if (!content || !currentFilePath) {
             showNotification('请先选择一个文件', true);
             return;
@@ -172,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     code: content,
+                    model: selectedModel,
                     stream: false
                 })
             });
@@ -185,8 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
             lastSavedAnalysis = result.content;
 
             // Automatically save the new analysis
-            await saveAnalysis();
-            showNotification('代码分析完成');
+            // await saveAnalysis();
+            showNotification('代码分析完成，如需保存请点击保存按钮');
         } catch (error) {
             console.error('Error during AI analysis:', error);
             aiResult.textContent = '分析代码时出错: ' + error.message;

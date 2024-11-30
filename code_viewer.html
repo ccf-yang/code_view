@@ -15,22 +15,52 @@
         .header {
             display: flex;
             margin-bottom: 20px;
+            align-items: center;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0.3;
         }
         .project-input {
-            width: 300px;
-            padding: 8px;
+            flex: 1;
+            padding: 6px 12px;
+            font-size: 14px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-width: 500px;
+        }
+        .project-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+        }
+        .input-type-select {
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            cursor: pointer;
+            width: 100px;
+        }
+        .input-type-select:focus {
+            outline: none;
+            border-color: #4CAF50;
         }
         .button {
-            margin-left: 10px;
-            padding: 8px 15px;
-            cursor: pointer;
-            border: none;
-            border-radius: 4px;
+            padding: 6px 12px;
             font-size: 14px;
-        }
-        .refresh-btn {
+            cursor: pointer;
             background-color: #4CAF50;
             color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .refresh-btn {
+            margin-left: 10px;
+            white-space: nowrap;
         }
         .ai-button {
             background-color: #4CAF50;
@@ -128,12 +158,25 @@
         .notification.error {
             background-color: #f44336;
         }
+        .current-file {
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            font-family: monospace;
+            color: #495057;
+        }
     </style>
 </head>
 <body>
     <div id="notification" class="notification"></div>
     <div class="header">
-        <input type="text" class="project-input" id="projectPath" placeholder="Enter project directory path">
+        <div class="input-group">
+            <select class="input-type-select" id="inputType">
+                <option value="local">本地目录</option>
+                <option value="git">Git仓库</option>
+            </select>
+            <input type="text" class="project-input" id="projectPath" placeholder="请输入本地目录路径，例如：D:/projects/mycode">
+        </div>
         <button class="button refresh-btn" id="refreshBtn">加载项目</button>
     </div>
     <div class="main-content">
@@ -141,7 +184,14 @@
             <!-- File list will be populated here -->
         </div>
         <div class="content-area">
+            <div class="current-file" id="currentFile">
+                <!-- Current file path will be displayed here -->
+            </div>
             <div class="button-area">
+                <select id="modelSelect" style="margin-right: 10px; padding: 5px; border-radius: 4px;">
+                    <option value="qwen/qwen-2-72b-instruct">Qwen-72B</option>
+                    <option value="glm-4-plus">GLM-4-Plus</option>
+                </select>
                 <button id="aiBtn">AI 分析</button>
                 <button id="saveAiBtn">保存分析</button>
             </div>
