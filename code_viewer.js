@@ -2,18 +2,137 @@ document.addEventListener('DOMContentLoaded', function() {
     const projectPath = document.getElementById('projectPath');
     const inputType = document.getElementById('inputType');
     const refreshBtn = document.getElementById('refreshBtn');
+    const historyBtn = document.getElementById('historyBtn');
+    const historyDropdown = document.getElementById('historyDropdown');
+    const selectWrapper = historyBtn.parentElement;
     const fileList = document.getElementById('fileList');
     const fileContent = document.getElementById('fileContent');
     const aiBtn = document.getElementById('aiBtn');
     const saveAiBtn = document.getElementById('saveAiBtn');
     const aiResult = document.getElementById('aiResult');
     const notification = document.getElementById('notification');
-    const modelSelect = document.getElementById('modelSelect'); // Assuming this element exists
+    const modelSelect = document.getElementById('modelSelect');
     const currentFile = document.getElementById('currentFile');
     
-    let currentFilePath = '';  // Store current file path
-    let lastSavedAnalysis = ''; // Store last saved analysis content
+    let currentFilePath = '';
+    let lastSavedAnalysis = '';
     let notificationTimeout;
+
+    // Load history function
+    async function loadHistory() {
+        try {
+            const response = await fetch('http://localhost:8000/api/history');
+            if (!response.ok) {
+                throw new Error('Failed to load history');
+            }
+            const data = await response.json();
+            
+            // Clear existing items
+            historyDropdown.innerHTML = '';
+            
+            // Filter history based on current input type
+            const currentType = inputType.value;
+            const filteredHistory = data.history.filter(path => {
+                if (currentType === 'git') {
+                    return path.startsWith('http://') || path.startsWith('https://') || path.startsWith('git://');
+                } else {
+                    return !path.startsWith('http://') && !path.startsWith('https://') && !path.startsWith('git://');
+                }
+            });
+            
+            if (filteredHistory.length === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'history-option';
+                emptyDiv.style.justifyContent = 'center';
+                emptyDiv.style.color = '#666';
+                emptyDiv.textContent = '暂无历史记录';
+                historyDropdown.appendChild(emptyDiv);
+                return;
+            }
+            
+            // Add history items
+            filteredHistory.forEach(path => {
+                const div = document.createElement('div');
+                div.className = 'history-option';
+                
+                const pathSpan = document.createElement('span');
+                pathSpan.textContent = path;
+                pathSpan.style.flex = '1';
+                pathSpan.style.overflow = 'hidden';
+                pathSpan.style.textOverflow = 'ellipsis';
+                div.appendChild(pathSpan);
+                
+                const deleteBtn = document.createElement('span');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = '×';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    try {
+                        const response = await fetch('http://localhost:8000/api/history', {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ path })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Failed to delete history item');
+                        }
+                        
+                        div.remove();
+                        if (historyDropdown.children.length === 0) {
+                            const emptyDiv = document.createElement('div');
+                            emptyDiv.className = 'history-option';
+                            emptyDiv.style.justifyContent = 'center';
+                            emptyDiv.style.color = '#666';
+                            emptyDiv.textContent = '暂无历史记录';
+                            historyDropdown.appendChild(emptyDiv);
+                        }
+                        showNotification('历史记录已删除');
+                    } catch (error) {
+                        console.error('Error deleting history:', error);
+                        showNotification('删除历史记录失败', true);
+                    }
+                };
+                div.appendChild(deleteBtn);
+                
+                div.onclick = () => {
+                    projectPath.value = path;
+                    // Copy to clipboard
+                    navigator.clipboard.writeText(path)
+                        .then(() => {
+                            showNotification('路径已复制到剪贴板');
+                            selectWrapper.classList.remove('open');
+                        })
+                        .catch(() => {
+                            showNotification('复制到剪贴板失败', true);
+                        });
+                };
+                
+                historyDropdown.appendChild(div);
+            });
+        } catch (error) {
+            console.error('Error loading history:', error);
+            showNotification('加载历史记录失败', true);
+        }
+    }
+
+    // Toggle dropdown
+    historyBtn.addEventListener('click', function(e) {
+        e.stopPropagation();  // 阻止事件冒泡
+        if (!selectWrapper.classList.contains('open')) {
+            loadHistory();
+        }
+        selectWrapper.classList.toggle('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!selectWrapper.contains(e.target)) {
+            selectWrapper.classList.remove('open');
+        }
+    });
 
     // Update input placeholder based on selected type
     inputType.addEventListener('change', function() {
@@ -23,6 +142,10 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             projectPath.placeholder = '请输入Git仓库地址，例如：https://github.com/username/repo';
             refreshBtn.textContent = '克隆并加载';
+        }
+        // Reload history when type changes
+        if (selectWrapper.classList.contains('open')) {
+            loadHistory();
         }
     });
 
@@ -53,23 +176,40 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        if (inputType.value === 'git') {
-            showNotification('Git仓库克隆功能即将推出，敬请期待！');
-            return;
-        }
-        
         try {
             fileList.innerHTML = '';
-            const response = await fetch(`http://localhost:8000/api/files?path=${encodeURIComponent(path)}`);
-            if (!response.ok) {
+            let finalPath = path;
+
+            if (inputType.value === 'git') {
+                // Clone repository if it's a Git URL
+                const response = await fetch('http://localhost:8000/api/clone-repo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: path })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to clone repository');
+                }
+
+                const result = await response.json();
+                finalPath = result.path;
+            }
+
+            // Load files using the local path
+            const filesResponse = await fetch(`http://localhost:8000/api/files?path=${encodeURIComponent(finalPath)}&should_save_history=true`);
+            if (!filesResponse.ok) {
                 throw new Error('Failed to load files');
             }
-            const files = await response.json();
+            const files = await filesResponse.json();
             displayFiles(files, fileList, 0);
-            showNotification('项目加载成功');
+            showNotification(inputType.value === 'git' ? '仓库克隆并加载成功' : '项目加载成功');
         } catch (error) {
-            console.error('Error loading files:', error);
-            showNotification('加载项目失败，请检查路径后重试', true);
+            console.error('Error:', error);
+            showNotification(error.message || '操作失败，请检查后重试', true);
         }
     });
 

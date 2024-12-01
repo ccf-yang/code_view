@@ -1,6 +1,10 @@
 import os
 import json
 import logging
+import subprocess
+from urllib.parse import urlparse
+from pathlib import Path
+from typing import List
 from openai import OpenAI
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,9 +41,125 @@ class AnalyzeRequest(BaseModel):
     model: str = "qwen/qwen-2-72b-instruct"  # 默认使用 Novita AI
     stream: bool = False
 
+class GitRepoRequest(BaseModel):
+    url: str
+
 class SaveAnalysisRequest(BaseModel):
     path: str
     content: str
+
+class HistoryRequest(BaseModel):
+    path: str
+
+class DeleteHistoryRequest(BaseModel):
+    path: str
+
+# Ensure data/gitcode directory exists
+GITCODE_DIR = Path("data/gitcode")
+GITCODE_DIR.mkdir(parents=True, exist_ok=True)
+
+# History log file path
+HISTORY_FILE = Path("history.log")
+
+def get_repo_name(url: str) -> str:
+    """Extract repository name from Git URL."""
+    parsed = urlparse(url)
+    path = parsed.path.strip('/')
+    return path.split('/')[-1].replace('.git', '')
+
+def get_existing_repo(url: str) -> str:
+    """Check if repository already exists locally."""
+    repo_name = get_repo_name(url)
+    repo_path = GITCODE_DIR / repo_name
+    if repo_path.exists():
+        return str(repo_path)
+    return None
+
+def load_history() -> List[str]:
+    """Load history from file."""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+    except Exception as e:
+        logger.error(f"Error loading history: {e}")
+        return []
+
+def save_history(path: str, is_git: bool = False):
+    """Save path to history if not exists."""
+    try:
+        history = load_history()
+        # 如果是Git URL，直接保存URL
+        path_to_save = path if is_git else str(Path(path).resolve())
+        if path_to_save not in history:
+            history.append(path_to_save)
+            with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"Error saving history: {e}")
+
+def delete_history(path: str):
+    """Delete path from history."""
+    try:
+        history = load_history()
+        if path in history:
+            history.remove(path)
+            with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(history, f, ensure_ascii=False, indent=2)
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Error deleting history: {e}")
+        return False
+
+@app.post("/api/clone-repo")
+async def clone_repo(request: GitRepoRequest):
+    """Clone a Git repository if it doesn't exist locally."""
+    try:
+        # Save Git URL to history
+        save_history(request.url, is_git=True)
+        
+        # Check if repo already exists
+        existing_path = get_existing_repo(request.url)
+        if existing_path:
+            logger.info(f"Repository already exists at {existing_path}")
+            return {"path": existing_path}
+
+        # Clone the repository
+        repo_name = get_repo_name(request.url)
+        repo_path = GITCODE_DIR / repo_name
+        
+        # Remove directory if it exists but is empty or incomplete
+        if repo_path.exists():
+            import shutil
+            shutil.rmtree(repo_path)
+            
+        logger.info(f"Cloning repository: {request.url} to {repo_path}")
+        result = subprocess.run(
+            ["git", "clone", request.url, str(repo_path)],
+            capture_output=True,
+            text=True,
+            check=False  # Don't raise exception immediately
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"Git clone failed with error: {result.stderr}")
+            raise HTTPException(status_code=400, detail=f"Git clone failed: {result.stderr}")
+            
+        if repo_path.exists():
+            logger.info(f"Repository successfully cloned to {repo_path}")
+            return {"path": str(repo_path)}
+        else:
+            logger.error("Repository path does not exist after clone")
+            raise HTTPException(status_code=500, detail="Failed to clone repository: path does not exist after clone")
+            
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Git clone process error: {e.stderr}")
+        raise HTTPException(status_code=400, detail=f"Git clone failed: {e.stderr}")
+    except Exception as e:
+        logger.error(f"Unexpected error during clone: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
 async def root():
@@ -54,9 +174,13 @@ async def serve_js():
     return FileResponse("code_viewer.js")
 
 @app.get("/api/files")
-async def get_files(path: str):
+async def get_files(path: str, should_save_history: bool = False):
     """Get directory contents."""
     try:
+        # Only save path to history if explicitly requested
+        if should_save_history:
+            save_history(path, is_git=False)
+        
         logger.info(f"Getting files from path: {path}")
         files = []
         for item in os.listdir(path):
@@ -111,6 +235,25 @@ async def save_analysis(request: SaveAnalysisRequest):
         return {"message": "Analysis saved successfully"}
     except Exception as e:
         logger.error(f"Error saving analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/history")
+async def get_history():
+    """Get path history."""
+    try:
+        history = load_history()
+        return {"history": history}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/history")
+async def remove_history(request: DeleteHistoryRequest):
+    """Remove path from history."""
+    try:
+        if delete_history(request.path):
+            return {"success": True}
+        raise HTTPException(status_code=404, detail="Path not found in history")
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 async def analyze_with_zhipu(code: str) -> str:
