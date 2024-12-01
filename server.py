@@ -261,7 +261,9 @@ async def analyze_with_zhipu(code: str) -> str:
     try:
         client = ZhipuAI(api_key=ZHIPU_API_KEY)
         response = client.chat.completions.create(
-            model="glm-4-plus",
+            timeout=200,
+            model="GLM-4-Flash", # free
+            # model="glm-4-plus", # 0.05 元 / 千tokens
             messages=[
                 {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."},
                 {"role": "user", "content": code}

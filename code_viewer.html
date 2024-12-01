@@ -122,28 +122,119 @@
             gap: 10px;
         }
         .split-content {
-            flex: 1;
             display: flex;
-            overflow: hidden;
+            margin-top: 20px;
+            gap: 20px;
+            height: calc(100vh - 180px);
         }
         .code-content {
-            width: 40%;
-            padding: 10px;
-            white-space: pre;
-            overflow: auto;
-            font-family: monospace;
-            border-right: 1px solid #ccc;
+            flex: 1;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            color: #2d3436;
+            white-space: pre-wrap;
+            tab-size: 4;
+            -moz-tab-size: 4;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .code-content::-webkit-scrollbar {
+            width: 12px;
+        }
+        .code-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        .code-content::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 6px;
+            border: 3px solid #f1f1f1;
+        }
+        .code-content::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
         }
         .ai-result {
-            width: 60%;
-            padding: 10px;
-            overflow: auto;
+            flex: 1;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            color: #2d3436;
             white-space: pre-wrap;
-            font-family: system-ui;
-            border-left: 1px solid #ccc;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
-        .ai-result:focus {
-            outline: 1px solid #4CAF50;
+        .ai-result::-webkit-scrollbar {
+            width: 12px;
+        }
+        .ai-result::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        .ai-result::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 6px;
+            border: 3px solid #f1f1f1;
+        }
+        .ai-result::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+        .code-content .keyword { color: #0066cc; }
+        .code-content .string { color: #008800; }
+        .code-content .comment { color: #808080; font-style: italic; }
+        .code-content .function { color: #660066; }
+        .code-content .number { color: #ff6600; }
+        .ai-result code {
+            background-color: #f3f4f5;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            color: #e17055;
+        }
+        .ai-result pre {
+            background-color: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .ai-result pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #2d3436;
+        }
+        .ai-result h1, .ai-result h2, .ai-result h3 {
+            color: #2d3436;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        .ai-result p {
+            margin: 8px 0;
+        }
+        .ai-result ul, .ai-result ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+        .ai-result li {
+            margin: 4px 0;
+        }
+        .ai-result blockquote {
+            border-left: 4px solid #e9ecef;
+            margin: 10px 0;
+            padding: 10px 20px;
+            background-color: #f8f9fa;
+            color: #636e72;
         }
         .history-select {
             display: inline-flex;
@@ -309,7 +400,7 @@
             <div class="button-area">
                 <select id="modelSelect" style="margin-right: 10px; padding: 5px; border-radius: 4px;">
                     <option value="qwen/qwen-2-72b-instruct">Qwen-72B</option>
-                    <option value="glm-4-plus">GLM-4-Plus</option>
+                    <option value="glm-4-plus">GLM-4-Free</option>
                 </select>
                 <button class="button" id="aiBtn">AI 分析</button>
                 <button class="button" id="saveAiBtn">保存分析</button>
