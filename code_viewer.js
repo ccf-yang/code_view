@@ -329,23 +329,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (analysisResponse.ok) {
                     const analysisData = await analysisResponse.json();
                     
-                    // 创建 pre 和 code 元素用于语法高亮
-                    const pre = document.createElement('pre');
-                    const code = document.createElement('code');
+                    // 使用 marked 渲染 Markdown
+                    aiResult.innerHTML = marked.parse(analysisData.content);
                     
-                    // 设置代码内容
-                    code.textContent = analysisData.content;
-                    pre.appendChild(code);
-                    
-                    // 清空并添加新内容
-                    aiResult.innerHTML = '';
-                    aiResult.appendChild(pre);
-                    
-                    // 等待 DOM 更新后应用高亮
-                    setTimeout(() => {
-                        hljs.highlightElement(code);
-                    }, 0);
-
                     lastSavedAnalysis = analysisData.content;
                     showNotification('文件及分析加载完成');
                 } else {
@@ -395,23 +381,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const result = await response.json();
             
-            // 创建 pre 和 code 元素用于语法高亮
-            const pre = document.createElement('pre');
-            const code = document.createElement('code');
+            // 使用 marked 渲染 Markdown
+            aiResult.innerHTML = marked.parse(result.content);
             
-            // 设置代码内容
-            code.textContent = result.content;
-            pre.appendChild(code);
-            
-            // 清空并添加新内容
-            aiResult.innerHTML = '';
-            aiResult.appendChild(pre);
-            
-            // 等待 DOM 更新后应用高亮
-            setTimeout(() => {
-                hljs.highlightElement(code);
-            }, 0);
-
             lastSavedAnalysis = result.content;
             showNotification('代码分析完成，如需保存请点击保存按钮');
         } catch (error) {
