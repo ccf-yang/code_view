@@ -8,6 +8,7 @@ from typing import List
 from openai import OpenAI
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
@@ -17,6 +18,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# 添加静态文件支持
+app.mount("/public", StaticFiles(directory="public"), name="public")
 
 # Configure CORS
 app.add_middleware(

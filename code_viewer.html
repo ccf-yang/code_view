@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project Code Viewer</title>
+    <link rel="stylesheet" href="public/js/vs.min.css">
     <style>
         body {
             font-family: system-ui, -apple-system, Arial, sans-serif;
@@ -132,45 +133,53 @@
             padding: 20px;
             background-color: #f8f9fa;
             border-radius: 8px;
+            overflow-y: auto;
+            border: 1px solid #e9ecef;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .code-content pre,
+        .code-content pre code,
+        .code-content code {
+            background-color: #f8f9fa !important;
+        }
+        .code-content pre {
+            margin: 0;
+            padding: 0;
+        }
+        .code-content code {
             font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
             font-size: 14px;
             line-height: 1.5;
-            overflow-y: auto;
-            border: 1px solid #e9ecef;
-            color: #2d3436;
-            white-space: pre-wrap;
             tab-size: 4;
             -moz-tab-size: 4;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .code-content::-webkit-scrollbar {
-            width: 12px;
-        }
-        .code-content::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 6px;
-        }
-        .code-content::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 6px;
-            border: 3px solid #f1f1f1;
-        }
-        .code-content::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
         }
         .ai-result {
             flex: 1;
             padding: 20px;
-            background-color: #fff;
+            background-color: #f8f9fa;
             border-radius: 8px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            font-size: 14px;
-            line-height: 1.6;
             overflow-y: auto;
             border: 1px solid #e9ecef;
-            color: #2d3436;
-            white-space: pre-wrap;
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .ai-result pre,
+        .ai-result pre code,
+        .ai-result code {
+            background-color: #f8f9fa !important;
+            white-space: pre-wrap !important;       /* 允许自动换行 */
+            word-wrap: break-word !important;       /* 允许长单词断行 */
+            overflow-wrap: break-word !important;   /* 现代浏览器的长单词断行 */
+        }
+        .ai-result pre {
+            margin: 0;
+            padding: 0;
+        }
+        .ai-result code {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            tab-size: 4;
+            -moz-tab-size: 4;
         }
         .ai-result::-webkit-scrollbar {
             width: 12px;
@@ -186,32 +195,6 @@
         }
         .ai-result::-webkit-scrollbar-thumb:hover {
             background: #a8a8a8;
-        }
-        .code-content .keyword { color: #0066cc; }
-        .code-content .string { color: #008800; }
-        .code-content .comment { color: #808080; font-style: italic; }
-        .code-content .function { color: #660066; }
-        .code-content .number { color: #ff6600; }
-        .ai-result code {
-            background-color: #f3f4f5;
-            padding: 2px 4px;
-            border-radius: 4px;
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 13px;
-            color: #e17055;
-        }
-        .ai-result pre {
-            background-color: #f8f9fa;
-            padding: 12px;
-            border-radius: 6px;
-            border: 1px solid #e9ecef;
-            overflow-x: auto;
-            margin: 10px 0;
-        }
-        .ai-result pre code {
-            background-color: transparent;
-            padding: 0;
-            color: #2d3436;
         }
         .ai-result h1, .ai-result h2, .ai-result h3 {
             color: #2d3436;
@@ -415,6 +398,15 @@
             </div>
         </div>
     </div>
+    <script src="public/js/highlight.min.js"></script>
+    <script src="public/js/python.min.js"></script>
+    <script src="public/js/javascript.min.js"></script>
+    <script src="public/js/xml.min.js"></script>
+    <script src="public/js/css.min.js"></script>
+    <script src="public/js/go.min.js"></script>
+    <script>
+        hljs.highlightAll();
+    </script>
     <script type="module" src="code_viewer.js"></script>
 </body>
 </html>

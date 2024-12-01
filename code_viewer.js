@@ -288,18 +288,68 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Failed to load file content');
             }
             const contentData = await contentResponse.json();
-            fileContent.textContent = contentData.content;
+            
+            // 创建 pre 和 code 元素用于语法高亮
+            const pre = document.createElement('pre');
+            const code = document.createElement('code');
+            
+            // 根据文件扩展名设置语言
+            const ext = filePath.split('.').pop().toLowerCase();
+            const languageMap = {
+                'js': 'javascript',
+                'py': 'python',
+                'html': 'html',
+                'css': 'css',
+                'json': 'json',
+                'md': 'markdown',
+                'txt': 'plaintext',
+                'go': 'go'
+            };
+            
+            if (languageMap[ext]) {
+                code.classList.add(`language-${languageMap[ext]}`);
+            }
+            
+            // 设置代码内容
+            code.textContent = contentData.content;
+            pre.appendChild(code);
+            
+            // 清空并添加新内容
+            fileContent.innerHTML = '';
+            fileContent.appendChild(pre);
+            
+            // 等待 DOM 更新后应用高亮
+            setTimeout(() => {
+                hljs.highlightElement(code);
+            }, 0);
 
             // Try to load existing analysis
             try {
                 const analysisResponse = await fetch(`http://localhost:8000/api/load_analysis?path=${encodeURIComponent(filePath)}`);
                 if (analysisResponse.ok) {
                     const analysisData = await analysisResponse.json();
-                    aiResult.textContent = analysisData.content;
+                    
+                    // 创建 pre 和 code 元素用于语法高亮
+                    const pre = document.createElement('pre');
+                    const code = document.createElement('code');
+                    
+                    // 设置代码内容
+                    code.textContent = analysisData.content;
+                    pre.appendChild(code);
+                    
+                    // 清空并添加新内容
+                    aiResult.innerHTML = '';
+                    aiResult.appendChild(pre);
+                    
+                    // 等待 DOM 更新后应用高亮
+                    setTimeout(() => {
+                        hljs.highlightElement(code);
+                    }, 0);
+
                     lastSavedAnalysis = analysisData.content;
                     showNotification('文件及分析加载完成');
                 } else {
-                    aiResult.textContent = '';
+                    aiResult.innerHTML = '';
                     lastSavedAnalysis = '';
                     showNotification('文件加载完成');
                 }
@@ -344,11 +394,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             const result = await response.json();
-            aiResult.textContent = result.content;
-            lastSavedAnalysis = result.content;
+            
+            // 创建 pre 和 code 元素用于语法高亮
+            const pre = document.createElement('pre');
+            const code = document.createElement('code');
+            
+            // 设置代码内容
+            code.textContent = result.content;
+            pre.appendChild(code);
+            
+            // 清空并添加新内容
+            aiResult.innerHTML = '';
+            aiResult.appendChild(pre);
+            
+            // 等待 DOM 更新后应用高亮
+            setTimeout(() => {
+                hljs.highlightElement(code);
+            }, 0);
 
-            // Automatically save the new analysis
-            // await saveAnalysis();
+            lastSavedAnalysis = result.content;
             showNotification('代码分析完成，如需保存请点击保存按钮');
         } catch (error) {
             console.error('Error during AI analysis:', error);
