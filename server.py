@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +20,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+# Get the application's base directory
+if getattr(sys, 'frozen', False):
+    # If the application is run as a bundle (packaged with PyInstaller)
+    base_dir = sys._MEIPASS
+else:
+    # If the application is run from a Python interpreter
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
 # 添加静态文件支持
-app.mount("/public", StaticFiles(directory="public"), name="public")
+public_dir = os.path.join(base_dir, "public")
+app.mount("/public", StaticFiles(directory=public_dir), name="public")
 
 # Configure CORS
 app.add_middleware(

@@ -1,0 +1,76 @@
+# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['start_app.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('code_viewer.html', '.'),
+        ('code_viewer.js', '.'),
+        ('public', 'public'),
+        ('requirements.txt', '.'),
+    ],
+    hiddenimports=[
+        'uvicorn.logging',
+        'uvicorn.loops',
+        'uvicorn.loops.auto',
+        'uvicorn.protocols',
+        'uvicorn.protocols.http',
+        'uvicorn.protocols.http.auto',
+        'uvicorn.protocols.websockets',
+        'uvicorn.protocols.websockets.auto',
+        'uvicorn.lifespan',
+        'uvicorn.lifespan.on',
+        'fastapi',
+        'starlette',
+        'pydantic',
+        'pydantic.json',
+        'pydantic_core',
+        'pydantic_core._pydantic_core',
+        'pydantic.errors',
+        'pydantic.fields',
+        'pydantic.main',
+        'pydantic.networks',
+        'pydantic.types',
+        'pydantic.validators',
+        'zhipuai',
+        'openai',
+        'typing',
+        'email_validator',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['_pyinstaller_hooks_contrib.hooks.stdhooks.hook-pydantic'],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='Code Viewer',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon='public/favicon.ico'
+)

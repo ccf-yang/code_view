@@ -403,8 +403,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const currentAnalysis = aiResult.textContent;
-        if (!currentAnalysis.trim()) {
+        if (!lastSavedAnalysis.trim()) {
             showNotification('没有可保存的分析内容', true);
             return;
         }
@@ -417,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     path: currentFilePath,
-                    content: currentAnalysis
+                    content: lastSavedAnalysis
                 })
             });
 
@@ -425,7 +424,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Failed to save analysis');
             }
 
-            lastSavedAnalysis = currentAnalysis;
             showNotification('分析保存成功');
         } catch (error) {
             console.error('Error saving analysis:', error);
