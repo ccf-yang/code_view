@@ -18,6 +18,42 @@ import sys
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Read API keys from JSON file
+def load_api_keys():
+    try:
+        with open(r"D:\api_key\llmapi.json", "r", encoding="utf-8") as f:
+            keys = json.load(f)
+            
+        glm_key = None
+        novita_key = None
+        
+        # Find GLM and NOVITA keys
+        for key_name, value in keys.items():
+            if key_name.startswith("GLM"):
+                glm_key = value
+            elif "NOVITA" in key_name:
+                novita_key = value
+        
+        if not glm_key or not novita_key:
+            logger.error("Required API keys not found in llmkey.json")
+            raise ValueError("Missing required API keys")
+            
+        return glm_key, novita_key
+    except Exception as e:
+        logger.error(f"Error loading API keys: {str(e)}")
+        raise
+
+# Load API keys
+try:
+    ZHIPU_API_KEY, NOVITA_API_KEY = load_api_keys()
+    logger.info("API keys loaded successfully")
+    logger.info("zhipu api key: " + ZHIPU_API_KEY)
+    logger.info("novita api key: " + NOVITA_API_KEY)
+except Exception as e:
+    logger.error(f"Failed to load API keys: {str(e)}")
+    ZHIPU_API_KEY = ""
+    NOVITA_API_KEY = ""
+
 app = FastAPI()
 
 # Get the application's base directory
@@ -44,11 +80,11 @@ app.add_middleware(
 # Initialize OpenAI client
 client = OpenAI(
     base_url="https://api.novita.ai/v3/openai",
-    api_key="d63ccf43-a0e1-4011-b5cc-19d204794b29"
+    api_key=NOVITA_API_KEY
 )
 
 # 智谱AI配置
-ZHIPU_API_KEY = "907cd4277f8a353cdc15dbcd2c287327.699fhMuv7NCKDyIS"  # 请填写您的智谱API密钥
+ZHIPU_API_KEY = ZHIPU_API_KEY  # 从配置文件读取的智谱API密钥
 
 class AnalyzeRequest(BaseModel):
     code: str
@@ -297,15 +333,19 @@ async def analyze_code(request: AnalyzeRequest):
             content = await analyze_with_zhipu(request.code)
         else:
             logger.info(f"Using Novita AI model {request.model} for code analysis")
-            completion_res = client.completions.create(
+            system_content="You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese.",
+            completion_res = client.chat.completions.create(
                 model=request.model,
-                prompt="You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese.Code: " + request.code,
+                messages=[
+                        { "role": "system", "content": system_content },
+                        { "role": "user", "content": f"{request.code}" },
+                    ],
                 temperature=0.8,
                 stream=False,
-                max_tokens=5000,
-                timeout=100
+                max_tokens=8192,
+                timeout=60
             )
-            content = completion_res.choices[0].text
+            content = completion_res.choices[0].message.content
 
         return {"content": content}
     except Exception as e:
