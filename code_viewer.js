@@ -356,13 +356,19 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = fileContent.textContent;
         const selectedModel = modelSelect.value;
         
-        if (!content || !currentFilePath) {
+        if (!content.trim()) {
             showNotification('请先选择一个文件', true);
             return;
         }
 
         try {
-            aiResult.textContent = '正在分析代码...';
+            aiBtn.disabled = true;
+            aiBtn.textContent = '分析中...';
+            aiResult.innerHTML = '正在分析代码，请稍候...';
+
+            // Map 'pp' to 'ppinfra' for the API request
+            const modelForApi = selectedModel;
+
             const response = await fetch('http://localhost:8000/api/analyze', {
                 method: 'POST',
                 headers: {
@@ -370,26 +376,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     code: content,
-                    model: selectedModel,
-                    stream: false
+                    model: modelForApi
                 })
             });
 
             if (!response.ok) {
-                throw new Error('Failed to analyze code');
+                throw new Error('Analysis failed');
             }
 
-            const result = await response.json();
-            
-            // 使用 marked 渲染 Markdown
-            aiResult.innerHTML = marked.parse(result.content);
-            
-            lastSavedAnalysis = result.content;
-            showNotification('代码分析完成，如需保存请点击保存按钮');
+            const data = await response.json();
+            lastSavedAnalysis = data.content;  // Store the original markdown content
+            aiResult.innerHTML = marked.parse(data.content);
+            showNotification('分析完成');
         } catch (error) {
-            console.error('Error during AI analysis:', error);
-            aiResult.textContent = '分析代码时出错: ' + error.message;
-            showNotification('代码分析失败', true);
+            console.error('Error:', error);
+            aiResult.textContent = '分析失败，请重试';
+            showNotification('分析失败', true);
+        } finally {
+            aiBtn.disabled = false;
+            aiBtn.textContent = 'AI 分析';
         }
     });
 

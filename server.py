@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from zhipuai import ZhipuAI
 import sys
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +27,7 @@ def load_api_keys():
             
         glm_key = None
         novita_key = None
+        ppinfra_key = None
         
         # Find GLM and NOVITA keys
         for key_name, value in keys.items():
@@ -33,26 +35,30 @@ def load_api_keys():
                 glm_key = value
             elif "NOVITA" in key_name:
                 novita_key = value
+            elif "PPINFRA" in key_name:
+                ppinfra_key = value
         
-        if not glm_key or not novita_key:
+        if not glm_key or not novita_key or not ppinfra_key:
             logger.error("Required API keys not found in llmkey.json")
             raise ValueError("Missing required API keys")
             
-        return glm_key, novita_key
+        return glm_key, novita_key, ppinfra_key
     except Exception as e:
         logger.error(f"Error loading API keys: {str(e)}")
         raise
 
 # Load API keys
 try:
-    ZHIPU_API_KEY, NOVITA_API_KEY = load_api_keys()
+    ZHIPU_API_KEY, NOVITA_API_KEY, PPINFRA_API_KEY = load_api_keys()
     logger.info("API keys loaded successfully")
     logger.info("zhipu api key: " + ZHIPU_API_KEY)
     logger.info("novita api key: " + NOVITA_API_KEY)
+    logger.info("ppinfra api key: " + PPINFRA_API_KEY)
 except Exception as e:
     logger.error(f"Failed to load API keys: {str(e)}")
     ZHIPU_API_KEY = ""
     NOVITA_API_KEY = ""
+    PPINFRA_API_KEY = ""
 
 app = FastAPI()
 
@@ -77,14 +83,104 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize OpenAI client
-client = OpenAI(
-    base_url="https://api.novita.ai/v3/openai",
-    api_key=NOVITA_API_KEY
-)
+class AIClientSingleton:
+    """AI客户端单例模式管理类"""
+    _zhipu_instance = None
+    _novita_instance = None
+    _ppinfra_instance = None
+    _lock = threading.Lock()
 
-# 智谱AI配置
-ZHIPU_API_KEY = ZHIPU_API_KEY  # 从配置文件读取的智谱API密钥
+    @classmethod
+    def get_zhipu_client(cls) -> ZhipuAI:
+        """获取智谱AI客户端单例"""
+        if cls._zhipu_instance is None:
+            with cls._lock:
+                if cls._zhipu_instance is None:
+                    logger.info("Creating new ZhipuAI client instance")
+                    cls._zhipu_instance = ZhipuAI(api_key=ZHIPU_API_KEY)
+        return cls._zhipu_instance
+
+    @classmethod
+    def get_novita_client(cls) -> OpenAI:
+        """获取Novita客户端单例"""
+        if cls._novita_instance is None:
+            with cls._lock:
+                if cls._novita_instance is None:
+                    logger.info("Creating new Novita client instance")
+                    cls._novita_instance = OpenAI(
+                        base_url="https://api.novita.ai/v3/openai",
+                        api_key=NOVITA_API_KEY
+                    )
+        return cls._novita_instance
+
+    @classmethod
+    def get_ppinfra_client(cls) -> OpenAI:
+        """获取PPInfra客户端单例"""
+        if cls._ppinfra_instance is None:
+            with cls._lock:
+                if cls._ppinfra_instance is None:
+                    logger.info("Creating new PPInfra client instance")
+                    cls._ppinfra_instance = OpenAI(
+                        base_url="https://api.ppinfra.com/v3/openai",
+                        api_key=PPINFRA_API_KEY
+                    )
+        return cls._ppinfra_instance
+
+    @classmethod
+    def reset_clients(cls):
+        """重置客户端实例（在需要重新创建时使用）"""
+        with cls._lock:
+            cls._zhipu_instance = None
+            cls._novita_instance = None
+            cls._ppinfra_instance = None
+            logger.info("Reset all AI client instances")
+
+async def analyze_with_zhipu(code: str) -> str:
+    """使用智谱AI分析代码"""
+    try:
+        client = AIClientSingleton.get_zhipu_client()
+        response = client.chat.completions.create(
+            timeout=200,
+            model="GLM-4-Flash",  # free
+            # model="glm-4-plus",  # 0.05 元 / 千tokens
+            messages=[
+                {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."},
+                {"role": "user", "content": code}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error with Zhipu AI: {str(e)}")
+        # 如果发生错误，重置客户端实例
+        AIClientSingleton.reset_clients()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def analyze_with_openai_compatible(code: str, model: str, client_type: str) -> str:
+    """使用OpenAI兼容接口的服务分析代码"""
+    try:
+        if client_type == "novita":
+            client = AIClientSingleton.get_novita_client()
+        else:  # ppinfra
+            client = AIClientSingleton.get_ppinfra_client()
+            
+        system_content = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."
+        
+        completion_res = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": code}
+            ],
+            temperature=0.8,
+            stream=False,
+            max_tokens=8192,
+            timeout=60
+        )
+        return completion_res.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Error with {client_type} AI: {str(e)}")
+        AIClientSingleton.reset_clients()
+        raise HTTPException(status_code=500, detail=str(e))
 
 class AnalyzeRequest(BaseModel):
     code: str
@@ -306,46 +402,20 @@ async def remove_history(request: DeleteHistoryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-async def analyze_with_zhipu(code: str) -> str:
-    """使用智谱AI分析代码"""
-    try:
-        client = ZhipuAI(api_key=ZHIPU_API_KEY)
-        response = client.chat.completions.create(
-            timeout=200,
-            model="GLM-4-Flash", # free
-            # model="glm-4-plus", # 0.05 元 / 千tokens
-            messages=[
-                {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."},
-                {"role": "user", "content": code}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"Error with Zhipu AI: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/analyze")
 async def analyze_code(request: AnalyzeRequest):
     """Analyze code using selected AI model."""
     try:
+        print(request.model)
         if request.model == "glm-4-plus":
             logger.info("Using Zhipu AI for code analysis")
             content = await analyze_with_zhipu(request.code)
+        elif request.model == "ppinfra":
+            logger.info("Using PPInfra for code analysis")
+            content = await analyze_with_openai_compatible(request.code, "qwen/qwen-2-72b-instruct", "ppinfra")
         else:
             logger.info(f"Using Novita AI model {request.model} for code analysis")
-            system_content="You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese.",
-            completion_res = client.chat.completions.create(
-                model=request.model,
-                messages=[
-                        { "role": "system", "content": system_content },
-                        { "role": "user", "content": f"{request.code}" },
-                    ],
-                temperature=0.8,
-                stream=False,
-                max_tokens=8192,
-                timeout=60
-            )
-            content = completion_res.choices[0].message.content
+            content = await analyze_with_openai_compatible(request.code, request.model, "novita")
 
         return {"content": content}
     except Exception as e:

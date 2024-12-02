@@ -1,0 +1,28 @@
+# Distribution / packaging
+dist/
+build/
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating System
+.DS_Store
+Thumbs.db
