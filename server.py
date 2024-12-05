@@ -22,12 +22,13 @@ logger = logging.getLogger(__name__)
 # Read API keys from JSON file
 def load_api_keys():
     try:
-        with open(r"D:\api_key\llmapi.json", "r", encoding="utf-8") as f:
+        with open("D:\\api_key\\llmapi.json", "r", encoding="utf-8") as f:
             keys = json.load(f)
             
         glm_key = None
         novita_key = None
         ppinfra_key = None
+        modelscope_key = None
         
         # Find GLM and NOVITA keys
         for key_name, value in keys.items():
@@ -37,28 +38,32 @@ def load_api_keys():
                 novita_key = value
             elif "PPINFRA" in key_name:
                 ppinfra_key = value
+            elif "MODELSCOPE" in key_name:
+                modelscope_key = value
         
-        if not glm_key or not novita_key or not ppinfra_key:
+        if not glm_key or not novita_key or not ppinfra_key or not modelscope_key:
             logger.error("Required API keys not found in llmkey.json")
             raise ValueError("Missing required API keys")
             
-        return glm_key, novita_key, ppinfra_key
+        return glm_key, novita_key, ppinfra_key, modelscope_key
     except Exception as e:
         logger.error(f"Error loading API keys: {str(e)}")
         raise
 
 # Load API keys
 try:
-    ZHIPU_API_KEY, NOVITA_API_KEY, PPINFRA_API_KEY = load_api_keys()
+    ZHIPU_API_KEY, NOVITA_API_KEY, PPINFRA_API_KEY, MODELSCOPE_API_KEY = load_api_keys()
     logger.info("API keys loaded successfully")
     logger.info("zhipu api key: " + ZHIPU_API_KEY)
     logger.info("novita api key: " + NOVITA_API_KEY)
     logger.info("ppinfra api key: " + PPINFRA_API_KEY)
+    logger.info("modelscope api key: " + MODELSCOPE_API_KEY)
 except Exception as e:
     logger.error(f"Failed to load API keys: {str(e)}")
     ZHIPU_API_KEY = ""
     NOVITA_API_KEY = ""
     PPINFRA_API_KEY = ""
+    MODELSCOPE_API_KEY = ""
 
 app = FastAPI()
 
@@ -88,6 +93,7 @@ class AIClientSingleton:
     _zhipu_instance = None
     _novita_instance = None
     _ppinfra_instance = None
+    _modelscope_instance = None
     _lock = threading.Lock()
 
     @classmethod
@@ -127,12 +133,27 @@ class AIClientSingleton:
         return cls._ppinfra_instance
 
     @classmethod
+    def get_modelscope_client(cls) -> OpenAI:
+        """获取ModelScope客户端单例"""
+        if cls._modelscope_instance is None:
+            with cls._lock:
+                if cls._modelscope_instance is None:
+                    logger.info("Creating new ModelScope client instance")
+                    cls._modelscope_instance = OpenAI(
+                        api_key=MODELSCOPE_API_KEY,
+                        base_url="https://api-inference.modelscope.cn/v1/"
+                    )
+        return cls._modelscope_instance
+
+    @classmethod
     def reset_clients(cls):
         """重置客户端实例（在需要重新创建时使用）"""
         with cls._lock:
             cls._zhipu_instance = None
             cls._novita_instance = None
             cls._ppinfra_instance = None
+            cls._modelscope_instance = None
+            cls._mota_instance = None
             logger.info("Reset all AI client instances")
 
 async def analyze_with_zhipu(code: str) -> str:
@@ -144,7 +165,7 @@ async def analyze_with_zhipu(code: str) -> str:
             model="GLM-4-Flash",  # free
             # model="glm-4-plus",  # 0.05 元 / 千tokens
             messages=[
-                {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."},
+                {"role": "system", "content": "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. For each function, it is imperative to elucidate its purpose, detailing what it takes as input, what it outputs, and the specific functionality it accomplishes.The explanations should be given in Chinese."},
                 {"role": "user", "content": code}
             ]
         )
@@ -160,10 +181,13 @@ async def analyze_with_openai_compatible(code: str, model: str, client_type: str
     try:
         if client_type == "novita":
             client = AIClientSingleton.get_novita_client()
-        else:  # ppinfra
+        elif client_type == "ppinfra":
             client = AIClientSingleton.get_ppinfra_client()
+        elif client_type == "modelscope":
+            client = AIClientSingleton.get_modelscope_client()
+
             
-        system_content = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. The explanations should be given in Chinese."
+        system_content = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. For each function, it is imperative to elucidate its purpose, detailing what it takes as input, what it outputs, and the specific functionality it accomplishes.The explanations should be given in Chinese."
         
         completion_res = client.chat.completions.create(
             model=model,
@@ -413,6 +437,9 @@ async def analyze_code(request: AnalyzeRequest):
         elif request.model == "ppinfra":
             logger.info("Using PPInfra for code analysis")
             content = await analyze_with_openai_compatible(request.code, "qwen/qwen-2-72b-instruct", "ppinfra")
+        elif request.model == "modelscope":
+            logger.info("Using ModelScope for code analysis")
+            content = await analyze_with_openai_compatible(request.code, "Qwen/Qwen2.5-Coder-32B-Instruct", "modelscope")
         else:
             logger.info(f"Using Novita AI model {request.model} for code analysis")
             content = await analyze_with_openai_compatible(request.code, request.model, "novita")
