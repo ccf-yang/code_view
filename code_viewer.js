@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const notification = document.getElementById('notification');
     const modelSelect = document.getElementById('modelSelect');
     const currentFile = document.getElementById('currentFile');
+    const analysisTypeSelect = document.getElementById('analysisType');
     
     let currentFilePath = '';
     let lastSavedAnalysis = '';
@@ -355,6 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
     aiBtn.addEventListener('click', async () => {
         const content = fileContent.textContent;
         const selectedModel = modelSelect.value;
+        const analysisType = analysisTypeSelect.value;
         
         if (!content.trim()) {
             showNotification('请先选择一个文件', true);
@@ -366,28 +368,47 @@ document.addEventListener('DOMContentLoaded', function() {
             aiBtn.textContent = '分析中...';
             aiResult.innerHTML = '正在分析代码，请稍候...';
 
-            // Map 'pp' to 'ppinfra' for the API request
-            const modelForApi = selectedModel;
+            const timeout = 180000; // 3分钟超时
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-            const response = await fetch('http://localhost:8000/api/analyze', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    code: content,
-                    model: modelForApi
-                })
-            });
+            try {
+                const response = await Promise.race([
+                    fetch('http://localhost:8000/api/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            code: content,
+                            model: selectedModel,
+                            analytype: analysisType
+                        }),
+                        signal: controller.signal
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('请求超时')), timeout)
+                    )
+                ]);
 
-            if (!response.ok) {
-                throw new Error('Analysis failed');
+                clearTimeout(timeoutId); // 清除超时计时器
+
+                if (!response.ok) {
+                    throw new Error('Analysis failed');
+                }
+
+                const data = await response.json();
+                lastSavedAnalysis = data.content;
+                aiResult.innerHTML = marked.parse(data.content);
+                showNotification('分析完成');
+            } catch (error) {
+                if (error.name === 'AbortError' || error.message === '请求超时') {
+                    showNotification('分析请求超时，请重试', true);
+                    aiResult.textContent = '分析超时，请重试';
+                } else {
+                    throw error; // 将其他错误传递给外层 catch
+                }
             }
-
-            const data = await response.json();
-            lastSavedAnalysis = data.content;  // Store the original markdown content
-            aiResult.innerHTML = marked.parse(data.content);
-            showNotification('分析完成');
         } catch (error) {
             console.error('Error:', error);
             aiResult.textContent = '分析失败，请重试';
@@ -409,7 +430,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (!lastSavedAnalysis.trim()) {
-            showNotification('没有可保存的分析内容', true);
+            // showNotification('没有可保存的分析内容', true);
+            lastSavedAnalysis=document.getElementById('aiResult').textContent;
+            console.log(lastSavedAnalysis)
             return;
         }
 
@@ -441,6 +464,74 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.ctrlKey && e.key === 's' && document.activeElement === aiResult) {
             e.preventDefault();
             await saveAnalysis();
+        }
+    });
+
+    // 添加新的按钮事件监听器
+    const aiSelectedBtn = document.getElementById('aiSelectedBtn');
+
+    aiSelectedBtn.addEventListener('click', async () => {
+        // 获取选中的文本
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        if (!selectedText) {
+            showNotification('请先选择要分析的代码', true);
+            return;
+        }
+
+        try {
+            aiSelectedBtn.disabled = true;
+            aiSelectedBtn.textContent = '分析中...';
+            aiResult.innerHTML = '正在分析选中的代码，请稍候...';
+
+            const timeout = 300000; // 5分钟超时
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await Promise.race([
+                    fetch('http://localhost:8000/api/analyze', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            code: selectedText,
+                            model: modelSelect.value
+                        }),
+                        signal: controller.signal
+                    }),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('请求超时')), timeout)
+                    )
+                ]);
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error('Analysis failed');
+                }
+
+                const data = await response.json();
+                lastSavedAnalysis = data.content;
+                aiResult.innerHTML = marked.parse(data.content);
+                showNotification('分析完成');
+            } catch (error) {
+                if (error.name === 'AbortError' || error.message === '请求超时') {
+                    showNotification('分析请求超时，请重试', true);
+                    aiResult.textContent = '分析超时，请重试';
+                } else {
+                    throw error;
+                }
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            aiResult.textContent = '分析失败，请重试';
+            showNotification('分析失败', true);
+        } finally {
+            aiSelectedBtn.disabled = false;
+            aiSelectedBtn.textContent = '分析选中代码';
         }
     });
 });

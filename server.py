@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from zhipuai import ZhipuAI
 import sys
 import threading
+from utools_model import do_request
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -176,7 +177,7 @@ async def analyze_with_zhipu(code: str) -> str:
         AIClientSingleton.reset_clients()
         raise HTTPException(status_code=500, detail=str(e))
 
-async def analyze_with_openai_compatible(code: str, model: str, client_type: str) -> str:
+async def analyze_with_openai_compatible(code: str, model: str, client_type: str, analytype: str = "detail") -> str:
     """使用OpenAI兼容接口的服务分析代码"""
     try:
         if client_type == "novita":
@@ -186,8 +187,13 @@ async def analyze_with_openai_compatible(code: str, model: str, client_type: str
         elif client_type == "modelscope":
             client = AIClientSingleton.get_modelscope_client()
 
-            
-        system_content = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. For each function, it is imperative to elucidate its purpose, detailing what it takes as input, what it outputs, and the specific functionality it accomplishes.The explanations should be given in Chinese."
+        # 根据分析类型选择不同的 system_content
+        if analytype == "simple":
+            logger.info("使用简单分析模式")
+            system_content = "请简要分析代码的主要功能和结构，用中文给出简洁的解释，仅给出代码的功能解释。"
+        else:
+            logger.info("使用详细分析模式")
+            system_content = "You are a benevolent programming expert, adept at deciphering code from the perspective of a beginner. The emphasis is on elucidating the functionality and operational mechanisms of the code in accessible and understandable language. Please start by summarizing the overall function of the code, then provide functional annotations for the provided code to help beginners quickly grasp the project and get started. For each function, it is imperative to elucidate its purpose, detailing what it takes as input, what it outputs, and the specific functionality it accomplishes.The explanations should be given in Chinese."
         
         completion_res = client.chat.completions.create(
             model=model,
@@ -208,8 +214,9 @@ async def analyze_with_openai_compatible(code: str, model: str, client_type: str
 
 class AnalyzeRequest(BaseModel):
     code: str
-    model: str = "qwen/qwen-2-72b-instruct"  # 默认使用 Novita AI
+    model: str = "qwen/qwen-2-72b-instruct"
     stream: bool = False
+    analytype: str = "detail"  # 新增字段，默认为详细分析
 
 class GitRepoRequest(BaseModel):
     url: str
@@ -383,13 +390,14 @@ async def load_analysis(path: str):
     """Load AI analysis from file if it exists."""
     try:
         analysis_path = path + '.ai'
+        print(analysis_path)
         if os.path.exists(analysis_path):
             logger.info(f"Loading analysis from: {analysis_path}")
             with open(analysis_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             return {"content": content}
         else:
-            raise HTTPException(status_code=404, detail="Analysis file not found")
+            return {"content": ""}
     except Exception as e:
         logger.error(f"Error loading analysis: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -434,15 +442,18 @@ async def analyze_code(request: AnalyzeRequest):
         if request.model == "glm-4-plus":
             logger.info("Using Zhipu AI for code analysis")
             content = await analyze_with_zhipu(request.code)
-        elif request.model == "ppinfra":
+        elif request.model.startswith("ppinfra"):
             logger.info("Using PPInfra for code analysis")
-            content = await analyze_with_openai_compatible(request.code, "qwen/qwen-2-72b-instruct", "ppinfra")
-        elif request.model == "modelscope":
+            content = await analyze_with_openai_compatible(request.code, request.model.split("|")[1], "ppinfra", request.analytype)
+        elif request.model.startswith("modelscope"):
             logger.info("Using ModelScope for code analysis")
-            content = await analyze_with_openai_compatible(request.code, "Qwen/Qwen2.5-Coder-32B-Instruct", "modelscope")
-        else:
+            content = await analyze_with_openai_compatible(request.code, "Qwen/Qwen2.5-Coder-32B-Instruct", "modelscope", request.analytype)
+        elif request.model == "qwen/qwen-2-72b-instruct":
             logger.info(f"Using Novita AI model {request.model} for code analysis")
-            content = await analyze_with_openai_compatible(request.code, request.model, "novita")
+            content = await analyze_with_openai_compatible(request.code, request.model, "novita", request.analytype)
+        else:
+            logger.info(f"Using utools's model {request.model} for code analysis")
+            content = do_request(modelname=request.model,prompt=request.code)
 
         return {"content": content}
     except Exception as e:
